@@ -645,6 +645,7 @@ class Project(object):
                relpath,
                revisionExpr,
                revisionId,
+               bare=False,
                rebase=True,
                groups=None,
                sync_c=False,
@@ -668,6 +669,7 @@ class Project(object):
       relpath: Relative path of git working tree to repo's top directory.
       revisionExpr: The `revision` attribute of manifest.xml's project element.
       revisionId: git commit id for checking out.
+      bare: Don't check out a revision, just make a bare clone.
       rebase: The `rebase` attribute of manifest.xml's project element.
       groups: The `groups` attribute of manifest.xml's project element.
       sync_c: The `sync-c` attribute of manifest.xml's project element.
@@ -691,14 +693,25 @@ class Project(object):
     else:
       self.worktree = None
     self.relpath = relpath
-    self.revisionExpr = revisionExpr
 
-    if revisionId is None \
-            and revisionExpr \
-            and IsId(revisionExpr):
-      self.revisionId = revisionExpr
+    self.bare = bare
+
+    if not self.bare:
+      self.revisionExpr = revisionExpr
+      if revisionId is None \
+              and revisionExpr \
+              and IsId(revisionExpr):
+        self.revisionId = revisionExpr
+      else:
+        self.revisionId = revisionId
     else:
-      self.revisionId = revisionId
+      if revisionId or revisionExpr:
+        raise ManifestInvalidRevisionError('revision specified for bare project %s' %
+                                         (self.name))
+
+      else:
+        self.revisionId = None
+        self.revisionExpr = None
 
     self.rebase = rebase
     self.groups = groups
@@ -719,7 +732,7 @@ class Project(object):
                                           defaults=self.manifest.globalConfig)
 
     if self.worktree:
-      self.work_git = self._GitGetByExec(self, bare=False, gitdir=gitdir)
+      self.work_git = self._GitGetByExec(self, bare=self.bare, gitdir=gitdir)
     else:
       self.work_git = None
     self.bare_git = self._GitGetByExec(self, bare=True, gitdir=gitdir)
@@ -1264,9 +1277,9 @@ class Project(object):
       elif self.manifest.default.sync_c:
         current_branch_only = True
 
-    need_to_fetch = not (optimized_fetch and
+    need_to_fetch = self.bare or (not (optimized_fetch and
                          (ID_RE.match(self.revisionExpr) and
-                          self._CheckForSha1()))
+                          self._CheckForSha1())))
     if (need_to_fetch and
         not self._RemoteFetch(initial=is_new, quiet=quiet, alt_dir=alt_dir,
                               current_branch_only=current_branch_only,
@@ -1314,6 +1327,9 @@ class Project(object):
     if self.revisionId:
       return self.revisionId
 
+    if self.bare:
+      return None
+
     rem = self.GetRemote(self.remote.name)
     rev = rem.ToLocal(self.revisionExpr)
 
@@ -1336,7 +1352,8 @@ class Project(object):
     revid = self.GetRevisionId(all_refs)
 
     def _doff():
-      self._FastForward(revid)
+      if not self.bare:
+        self._FastForward(revid)
       self._CopyAndLinkFiles()
 
     head = self.work_git.GetHead()
@@ -1357,7 +1374,7 @@ class Project(object):
         syncbuf.fail(self, _PriorSyncFailedError())
         return
 
-      if head == revid:
+      if head == revid or self.bare:
         # No changes; don't do anything further.
         # Except if the head needs to be detached
         #
@@ -1895,7 +1912,7 @@ class Project(object):
     # The depth should not be used when fetching to a mirror because
     # it will result in a shallow repository that cannot be cloned or
     # fetched from.
-    if not self.manifest.IsMirror:
+    if not self.manifest.IsMirror and not self.bare:
       if self.clone_depth:
         depth = self.clone_depth
       else:
@@ -1907,8 +1924,9 @@ class Project(object):
     if depth:
       current_branch_only = True
 
-    if ID_RE.match(self.revisionExpr) is not None:
-      is_sha1 = True
+    if not self.bare:
+      if ID_RE.match(self.revisionExpr) is not None:
+        is_sha1 = True
 
     if current_branch_only:
       if self.revisionExpr.startswith(R_TAGS):
@@ -2013,7 +2031,7 @@ class Project(object):
       spec.append('tag')
       spec.append(tag_name)
 
-    if not self.manifest.IsMirror:
+    if not self.manifest.IsMirror and not self.bare:
       branch = self.revisionExpr
       if is_sha1 and depth and git_require((1, 8, 3)):
         # Shallow checkout of a specific commit, fetch from that commit and not
@@ -2381,11 +2399,12 @@ class Project(object):
         dst = self.revisionId + '^0'
         self.bare_git.UpdateRef(ref, dst, message=msg, detach=True)
     else:
-      remote = self.GetRemote(self.remote.name)
-      dst = remote.ToLocal(self.revisionExpr)
-      if cur != dst:
-        msg = 'manifest set to %s' % self.revisionExpr
-        self.bare_git.symbolic_ref('-m', msg, ref, dst)
+      if not self.bare:
+        remote = self.GetRemote(self.remote.name)
+        dst = remote.ToLocal(self.revisionExpr)
+        if cur != dst:
+          msg = 'manifest set to %s' % self.revisionExpr
+          self.bare_git.symbolic_ref('-m', msg, ref, dst)
 
   def _CheckDirReference(self, srcdir, destdir, share_refs):
     symlink_files = self.shareable_files[:]
@@ -2463,7 +2482,10 @@ class Project(object):
           raise
 
   def _InitWorkTree(self, force_sync=False):
-    dotgit = os.path.join(self.worktree, '.git')
+    if self.bare:
+      dotgit = self.worktree
+    else:
+      dotgit = os.path.join(self.worktree, '.git')
     init_dotgit = not os.path.exists(dotgit)
     try:
       if init_dotgit:
