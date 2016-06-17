@@ -62,6 +62,7 @@ following DTD:
   <!ATTLIST project path        CDATA #IMPLIED>
   <!ATTLIST project remote      IDREF #IMPLIED>
   <!ATTLIST project revision    CDATA #IMPLIED>
+  <!ATTLIST project bare        CDATA #IMPLIED>
   <!ATTLIST project dest-branch CDATA #IMPLIED>
   <!ATTLIST project groups      CDATA #IMPLIED>
   <!ATTLIST project sync-c      CDATA #IMPLIED>
@@ -251,6 +252,11 @@ Tags and/or explicit SHA-1s should work in theory, but have not
 been extensively tested.  If not supplied the revision given by
 the remote element is used if applicable, else the default
 element is used.
+
+Attribute `bare`: Whether or not this should be a bare clone.
+A bare clone will not be checked out to a specific revision,
+but rather, the path specified will hold the bare contents that
+would otherwise be in the .git directory.
 
 Attribute `dest-branch`: Name of a Git branch (e.g. `master`).
 When using `repo upload`, changes will be submitted for code
