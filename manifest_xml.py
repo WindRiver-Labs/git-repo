@@ -807,12 +807,14 @@ class XmlManifest(object):
       raise ManifestParseError("no remote for project %s within %s" %
             (name, self.manifestFile))
 
+    bare = node.getAttribute('bare')
+
     revisionExpr = node.getAttribute('revision') or remote.revision
-    if not revisionExpr:
+    if not revisionExpr and not bare:
       revisionExpr = self._default.revisionExpr
-    if not revisionExpr:
-      raise ManifestParseError("no revision for project %s within %s" %
-            (name, self.manifestFile))
+      if not revisionExpr:
+        raise ManifestParseError("no revision for project %s within %s" %
+              (name, self.manifestFile))
 
     path = node.getAttribute('path')
     if not path:
@@ -886,6 +888,7 @@ class XmlManifest(object):
                       relpath = relpath,
                       revisionExpr = revisionExpr,
                       revisionId = None,
+                      bare = bare,
                       rebase = rebase,
                       groups = groups,
                       sync_c = sync_c,
