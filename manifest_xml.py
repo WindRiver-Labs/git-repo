@@ -256,25 +256,28 @@ class XmlManifest(object):
       if not d.remote or p.remote.orig_name != remoteName:
         remoteName = p.remote.orig_name
         e.setAttribute('remote', remoteName)
-      if peg_rev:
-        if self.IsMirror:
-          value = p.bare_git.rev_parse(p.revisionExpr + '^0')
-        else:
-          value = p.work_git.rev_parse(HEAD + '^0')
-        e.setAttribute('revision', value)
-        if peg_rev_upstream:
-          if p.upstream:
-            e.setAttribute('upstream', p.upstream)
-          elif value != p.revisionExpr:
-            # Only save the origin if the origin is not a sha1, and the default
-            # isn't our value
-            e.setAttribute('upstream', p.revisionExpr)
+      if p.bare:
+        e.setAttribute('bare', 'true')
       else:
-        revision = self.remotes[p.remote.orig_name].revision or d.revisionExpr
-        if not revision or revision != p.revisionExpr:
-          e.setAttribute('revision', p.revisionExpr)
-        if p.upstream and p.upstream != p.revisionExpr:
-          e.setAttribute('upstream', p.upstream)
+        if peg_rev:
+          if self.IsMirror:
+            value = p.bare_git.rev_parse(p.revisionExpr + '^0')
+          else:
+            value = p.work_git.rev_parse(HEAD + '^0')
+          e.setAttribute('revision', value)
+          if peg_rev_upstream:
+            if p.upstream:
+              e.setAttribute('upstream', p.upstream)
+            elif value != p.revisionExpr:
+              # Only save the origin if the origin is not a sha1, and the default
+              # isn't our value
+              e.setAttribute('upstream', p.revisionExpr)
+        else:
+          revision = self.remotes[p.remote.orig_name].revision or d.revisionExpr
+          if not revision or revision != p.revisionExpr:
+            e.setAttribute('revision', p.revisionExpr)
+          if p.upstream and p.upstream != p.revisionExpr:
+            e.setAttribute('upstream', p.upstream)
 
       if p.dest_branch and p.dest_branch != d.destBranchExpr:
         e.setAttribute('dest-branch', p.dest_branch)
