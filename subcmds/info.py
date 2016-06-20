@@ -94,7 +94,10 @@ class Info(PagedCommand):
       self.out.nl()
 
       self.heading("Current revision: ")
-      self.headtext(p.GetRevisionId())
+      if p.bare:
+        self.headtext("[bare repo]")
+      else:
+        self.headtext(p.GetRevisionId())
       self.out.nl()
 
       currentBranch = p.CurrentBranch
