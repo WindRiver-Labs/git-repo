@@ -847,11 +847,6 @@ class Project(object):
       else:
         self.revisionId = revisionId
     else:
-      if revisionId or revisionExpr:
-        raise ManifestInvalidRevisionError('revision specified for bare project %s' %
-                                         (self.name))
-
-      else:
         self.revisionId = None
         self.revisionExpr = None
 
@@ -1589,13 +1584,14 @@ class Project(object):
         if lost:
           syncbuf.info(self, "discarding %d commits", len(lost))
 
-      try:
-        self._Checkout(revid, quiet=True)
-        if submodules:
-          self._SyncSubmodules(quiet=True)
-      except GitError as e:
-        syncbuf.fail(self, e)
-        return
+      if not self.bare:
+        try:
+          self._Checkout(revid, quiet=True)
+          if submodules:
+            self._SyncSubmodules(quiet=True)
+        except GitError as e:
+          syncbuf.fail(self, e)
+          return
       self._CopyAndLinkFiles()
       return
 
@@ -1612,16 +1608,17 @@ class Project(object):
       # The current branch has no tracking configuration.
       # Jump off it to a detached HEAD.
       #
-      syncbuf.info(self,
+      if not self.bare:
+        syncbuf.info(self,
                    "leaving %s; does not track upstream",
                    branch.name)
-      try:
-        self._Checkout(revid, quiet=True)
-        if submodules:
-          self._SyncSubmodules(quiet=True)
-      except GitError as e:
-        syncbuf.fail(self, e)
-        return
+        try:
+          self._Checkout(revid, quiet=True)
+          if submodules:
+            self._SyncSubmodules(quiet=True)
+        except GitError as e:
+          syncbuf.fail(self, e)
+          return
       self._CopyAndLinkFiles()
       return
 
@@ -2249,7 +2246,7 @@ class Project(object):
 
     if quiet:
       cmd.append('--quiet')
-    if not self.worktree:
+    if not self.worktree or self.bare:
       cmd.append('--update-head-ok')
     cmd.append(name)
 
@@ -2461,6 +2458,9 @@ class Project(object):
       return False
 
   def _Checkout(self, rev, quiet=False):
+    if self.bare:
+      raise GitError('Can not checkout in bare repo %s!' % (self.name))
+
     cmd = ['checkout']
     if quiet:
       cmd.append('-q')
@@ -2650,7 +2650,7 @@ class Project(object):
       remote.review = self.remote.review
       remote.projectname = self.name
 
-      if self.worktree:
+      if self.worktree and not self.bare:
         remote.ResetFetch(mirror=False)
       else:
         remote.ResetFetch(mirror=True)
@@ -2790,20 +2790,24 @@ class Project(object):
       raise e
 
     if init_dotgit:
-      _lwrite(os.path.join(tmpdotgit, HEAD), '%s\n' % self.GetRevisionId())
+      if self.bare:
+          # Set a plausable default (refs/heads/master) since we don't know the right HEAD
+          _lwrite(os.path.join(dotgit, HEAD), 'ref: refs/heads/master\n')
+      else:
+          _lwrite(os.path.join(tmpdotgit, HEAD), '%s\n' % self.GetRevisionId())
 
-      # Now that the .git dir is fully set up, move it to its final home.
-      platform_utils.rename(tmpdotgit, realdotgit)
+          # Now that the .git dir is fully set up, move it to its final home.
+          platform_utils.rename(tmpdotgit, realdotgit)
 
-      # Finish checking out the worktree.
-      cmd = ['read-tree', '--reset', '-u']
-      cmd.append('-v')
-      cmd.append(HEAD)
-      if GitCommand(self, cmd).Wait() != 0:
-        raise GitError('Cannot initialize work tree for ' + self.name)
+          # Finish checking out the worktree.
+          cmd = ['read-tree', '--reset', '-u']
+          cmd.append('-v')
+          cmd.append(HEAD)
+          if GitCommand(self, cmd).Wait() != 0:
+            raise GitError('Cannot initialize work tree for ' + self.name)
 
-      if submodules:
-        self._SyncSubmodules(quiet=True)
+          if submodules:
+            self._SyncSubmodules(quiet=True)
       self._CopyAndLinkFiles()
 
   def _get_symlink_error_message(self):
