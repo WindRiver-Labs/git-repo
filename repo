@@ -339,7 +339,7 @@ def _Init(args, gitc_init=False):
 
   _CheckGitVersion()
   try:
-    if NeedSetupGnuPG():
+    if MAINTAINER_KEYS and NeedSetupGnuPG():
       can_verify = SetupGnuPG(opt.quiet)
     else:
       can_verify = True
