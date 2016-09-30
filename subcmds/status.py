@@ -132,6 +132,8 @@ the following meanings:
 
     if opt.jobs == 1:
       for project in all_projects:
+        if project.bare == 'True':
+          continue
         state = project.PrintWorkTreeStatus()
         if state == 'CLEAN':
           next(counter)
@@ -139,6 +141,8 @@ the following meanings:
       sem = _threading.Semaphore(opt.jobs)
       threads = []
       for project in all_projects:
+        if project.bare == 'True':
+          continue
         sem.acquire()
 
         t = _threading.Thread(target=self._StatusHelper,
@@ -155,6 +159,8 @@ the following meanings:
       proj_dirs = set()
       proj_dirs_parents = set()
       for project in self.GetProjects(None, missing_ok=True):
+        if project.bare == 'True':
+          continue
         proj_dirs.add(project.relpath)
         (head, _tail) = os.path.split(project.relpath)
         while head != "":
