@@ -80,6 +80,8 @@ revision specified in the manifest.
 
     pm = Progress('Starting %s' % nb, len(all_projects))
     for project in all_projects:
+      if project.bare == 'True':
+        continue
       pm.update()
 
       if self.gitc_manifest:
