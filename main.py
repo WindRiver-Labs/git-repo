@@ -260,20 +260,19 @@ def _CheckWrapperVersion(ver, repo_path):
   exp_str = '.'.join(map(str, exp))
   if exp[0] > ver[0] or ver < (0, 4):
     print("""
-!!! A new repo command (%5s) is available.    !!!
-!!! You must upgrade before you can continue:   !!!
+!!! The repo command you ran is not compatible. !!!
 
-    cp %s %s
-""" % (exp_str, WrapperPath(), repo_path), file=sys.stderr)
+    You should upgrade your system or run repo using:
+    %s
+""" % (WrapperPath()), file=sys.stderr)
     sys.exit(1)
 
   if exp > ver:
     print("""
-... A new repo command (%5s) is available.
-... You should upgrade soon:
-
-    cp %s %s
-""" % (exp_str, WrapperPath(), repo_path), file=sys.stderr)
+... The repo command in your project is newer.
+... You should upgrade your system or run repo using:
+    %s
+""" % (WrapperPath()), file=sys.stderr)
 
 def _CheckRepoDir(repo_dir):
   if not repo_dir:
