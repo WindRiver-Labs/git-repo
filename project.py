@@ -645,6 +645,7 @@ class Project(object):
                relpath,
                revisionExpr,
                revisionId,
+               bare=False,
                rebase=True,
                groups=None,
                sync_c=False,
@@ -668,6 +669,7 @@ class Project(object):
       relpath: Relative path of git working tree to repo's top directory.
       revisionExpr: The `revision` attribute of manifest.xml's project element.
       revisionId: git commit id for checking out.
+      bare: Don't check out a revision, just make a bare clone.
       rebase: The `rebase` attribute of manifest.xml's project element.
       groups: The `groups` attribute of manifest.xml's project element.
       sync_c: The `sync-c` attribute of manifest.xml's project element.
@@ -691,14 +693,20 @@ class Project(object):
     else:
       self.worktree = None
     self.relpath = relpath
-    self.revisionExpr = revisionExpr
 
-    if revisionId is None \
-            and revisionExpr \
-            and IsId(revisionExpr):
-      self.revisionId = revisionExpr
+    self.bare = bare
+
+    if not self.bare:
+      self.revisionExpr = revisionExpr
+      if revisionId is None \
+              and revisionExpr \
+              and IsId(revisionExpr):
+        self.revisionId = revisionExpr
+      else:
+        self.revisionId = revisionId
     else:
-      self.revisionId = revisionId
+        self.revisionId = None
+        self.revisionExpr = None
 
     self.rebase = rebase
     self.groups = groups
@@ -719,7 +727,7 @@ class Project(object):
                                           defaults=self.manifest.globalConfig)
 
     if self.worktree:
-      self.work_git = self._GitGetByExec(self, bare=False, gitdir=gitdir)
+      self.work_git = self._GitGetByExec(self, bare=self.bare, gitdir=gitdir)
     else:
       self.work_git = None
     self.bare_git = self._GitGetByExec(self, bare=True, gitdir=gitdir)
@@ -1269,9 +1277,9 @@ class Project(object):
     else:
       depth = self.manifest.manifestProject.config.GetString('repo.depth')
 
-    need_to_fetch = not (optimized_fetch and
+    need_to_fetch = self.bare or (not (optimized_fetch and
                          (ID_RE.match(self.revisionExpr) and
-                          self._CheckForSha1()))
+                          self._CheckForSha1())))
     if (need_to_fetch and
         not self._RemoteFetch(initial=is_new, quiet=quiet, alt_dir=alt_dir,
                               current_branch_only=current_branch_only,
@@ -1319,6 +1327,9 @@ class Project(object):
     if self.revisionId:
       return self.revisionId
 
+    if self.bare:
+      return None
+
     rem = self.GetRemote(self.remote.name)
     rev = rem.ToLocal(self.revisionExpr)
 
@@ -1341,7 +1352,8 @@ class Project(object):
     revid = self.GetRevisionId(all_refs)
 
     def _doff():
-      self._FastForward(revid)
+      if not self.bare:
+        self._FastForward(revid)
       self._CopyAndLinkFiles()
 
     head = self.work_git.GetHead()
@@ -1362,7 +1374,7 @@ class Project(object):
         syncbuf.fail(self, _PriorSyncFailedError())
         return
 
-      if head == revid:
+      if head == revid or self.bare:
         # No changes; don't do anything further.
         # Except if the head needs to be detached
         #
@@ -1375,11 +1387,12 @@ class Project(object):
         if lost:
           syncbuf.info(self, "discarding %d commits", len(lost))
 
-      try:
-        self._Checkout(revid, quiet=True)
-      except GitError as e:
-        syncbuf.fail(self, e)
-        return
+      if not self.bare:
+        try:
+          self._Checkout(revid, quiet=True)
+        except GitError as e:
+          syncbuf.fail(self, e)
+          return
       self._CopyAndLinkFiles()
       return
 
@@ -1396,14 +1409,15 @@ class Project(object):
       # The current branch has no tracking configuration.
       # Jump off it to a detached HEAD.
       #
-      syncbuf.info(self,
+      if not self.bare:
+        syncbuf.info(self,
                    "leaving %s; does not track upstream",
                    branch.name)
-      try:
-        self._Checkout(revid, quiet=True)
-      except GitError as e:
-        syncbuf.fail(self, e)
-        return
+        try:
+          self._Checkout(revid, quiet=True)
+        except GitError as e:
+          syncbuf.fail(self, e)
+          return
       self._CopyAndLinkFiles()
       return
 
@@ -1900,14 +1914,15 @@ class Project(object):
     # it will result in a shallow repository that cannot be cloned or
     # fetched from.
     # The repo project should also never be synced with partial depth.
-    if self.manifest.IsMirror or self.relpath == '.repo/repo':
+    if self.manifest.IsMirror or self.bare or self.relpath == '.repo/repo':
       depth = None
 
     if depth:
       current_branch_only = True
 
-    if ID_RE.match(self.revisionExpr) is not None:
-      is_sha1 = True
+    if not self.bare:
+      if ID_RE.match(self.revisionExpr) is not None:
+        is_sha1 = True
 
     if current_branch_only:
       if self.revisionExpr.startswith(R_TAGS):
@@ -1990,7 +2005,7 @@ class Project(object):
 
     if quiet:
       cmd.append('--quiet')
-    if not self.worktree:
+    if not self.worktree or self.bare:
       cmd.append('--update-head-ok')
     cmd.append(name)
 
@@ -2012,7 +2027,7 @@ class Project(object):
       spec.append('tag')
       spec.append(tag_name)
 
-    if not self.manifest.IsMirror:
+    if not self.manifest.IsMirror and not self.bare:
       branch = self.revisionExpr
       if is_sha1 and depth and git_require((1, 8, 3)):
         # Shallow checkout of a specific commit, fetch from that commit and not
@@ -2190,6 +2205,9 @@ class Project(object):
       return False
 
   def _Checkout(self, rev, quiet=False):
+    if self.bare:
+      raise GitError('Can not checkout in bare repo %s!' % (self.name))
+
     cmd = ['checkout']
     if quiet:
       cmd.append('-q')
@@ -2359,7 +2377,7 @@ class Project(object):
       remote.review = self.remote.review
       remote.projectname = self.name
 
-      if self.worktree:
+      if self.worktree and not self.bare:
         remote.ResetFetch(mirror=False)
       else:
         remote.ResetFetch(mirror=True)
@@ -2381,11 +2399,12 @@ class Project(object):
         dst = self.revisionId + '^0'
         self.bare_git.UpdateRef(ref, dst, message=msg, detach=True)
     else:
-      remote = self.GetRemote(self.remote.name)
-      dst = remote.ToLocal(self.revisionExpr)
-      if cur != dst:
-        msg = 'manifest set to %s' % self.revisionExpr
-        self.bare_git.symbolic_ref('-m', msg, ref, dst)
+      if not self.bare:
+        remote = self.GetRemote(self.remote.name)
+        dst = remote.ToLocal(self.revisionExpr)
+        if cur != dst:
+          msg = 'manifest set to %s' % self.revisionExpr
+          self.bare_git.symbolic_ref('-m', msg, ref, dst)
 
   def _CheckDirReference(self, srcdir, destdir, share_refs):
     symlink_files = self.shareable_files[:]
@@ -2464,7 +2483,10 @@ class Project(object):
           raise
 
   def _InitWorkTree(self, force_sync=False):
-    dotgit = os.path.join(self.worktree, '.git')
+    if self.bare:
+      dotgit = self.worktree
+    else:
+      dotgit = os.path.join(self.worktree, '.git')
     init_dotgit = not os.path.exists(dotgit)
     try:
       if init_dotgit:
@@ -2484,13 +2506,18 @@ class Project(object):
         raise e
 
       if init_dotgit:
-        _lwrite(os.path.join(dotgit, HEAD), '%s\n' % self.GetRevisionId())
+        if self.bare:
+          # Set a plausable default (refs/heads/master) since we don't know the right HEAD
+          _lwrite(os.path.join(dotgit, HEAD), 'ref: refs/heads/master\n')
+        else:
+          _lwrite(os.path.join(dotgit, HEAD), '%s\n' % self.GetRevisionId())
 
-        cmd = ['read-tree', '--reset', '-u']
-        cmd.append('-v')
-        cmd.append(HEAD)
-        if GitCommand(self, cmd).Wait() != 0:
-          raise GitError("cannot initialize work tree")
+          cmd = ['read-tree', '--reset', '-u']
+          cmd.append('-v')
+          cmd.append(HEAD)
+
+          if GitCommand(self, cmd).Wait() != 0:
+            raise GitError("cannot initialize work tree")
 
         self._CopyAndLinkFiles()
     except Exception:
