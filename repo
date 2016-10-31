@@ -5,8 +5,8 @@
 import os
 REPO_URL = os.environ.get('REPO_URL', None)
 if not REPO_URL:
-  REPO_URL = 'https://gerrit.googlesource.com/git-repo'
-REPO_REV = 'stable'
+  REPO_URL = 'git://git.wrs.com/tools/git-repo'
+REPO_REV = 'master-wr'
 
 # Copyright (C) 2008 Google Inc.
 #
