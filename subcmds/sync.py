@@ -544,6 +544,18 @@ later is required to fix a server side protocol bug.
     file_path = os.path.join(self.manifest.repodir, file_name)
     old_project_paths = []
 
+    def is_bare_repo(path):
+      cmd = [GIT, 'rev-parse', '--is-bare-repository']
+      ret = False
+      try:
+        ret = subprocess.check_output(cmd, stderr=subprocess.STDOUT, cwd=path)
+        if ret == 'true':
+            ret = True
+      except Exception as esc:
+        pass
+
+      return ret
+
     if os.path.exists(file_path):
       fd = open(file_path, 'r')
       try:
@@ -554,8 +566,13 @@ later is required to fix a server side protocol bug.
         if not path:
           continue
         if path not in new_project_paths:
+          path_full = os.path.join(self.manifest.topdir, path)
+          if is_bare_repo(path_full):
+            print('Deleting obsolete bare git repo %s' % path, file=sys.stderr)
+            shutil.rmtree(path_full)
+            continue
           # If the path has already been deleted, we don't need to do it
-          gitdir = os.path.join(self.manifest.topdir, path, '.git')
+          gitdir = os.path.join(path_full, '.git')
           if os.path.exists(gitdir):
             project = Project(
                            manifest = self.manifest,
