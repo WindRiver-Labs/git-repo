@@ -1794,6 +1794,9 @@ class Project(object):
     # because the working tree might not exist yet, and it cannot be used
     # without a working tree in its current implementation.
 
+    if not self.bare:
+      return []
+
     def get_submodules(gitdir, rev):
       # Parse .gitmodules for submodule sub_paths and sub_urls
       sub_paths, sub_urls = parse_gitmodules(gitdir, rev)
