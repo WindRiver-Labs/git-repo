@@ -1314,7 +1314,7 @@ class Project(object):
         not self._RemoteFetch(initial=is_new, quiet=quiet, alt_dir=alt_dir,
                               current_branch_only=current_branch_only,
                               no_tags=no_tags, prune=prune, depth=depth,
-                              submodules=submodules)):
+                              force_sync=force_sync, submodules=submodules)):
       return False
 
     mp = self.manifest.manifestProject
@@ -1969,6 +1969,7 @@ class Project(object):
                    no_tags=False,
                    prune=False,
                    depth=None,
+                   force_sync=False,
                    submodules=False):
 
     is_sha1 = False
@@ -2086,6 +2087,9 @@ class Project(object):
     if prune:
       cmd.append('--prune')
 
+    if force_sync:
+      cmd.append('--force')
+
     if submodules:
       cmd.append('--recurse-submodules=on-demand')
 
@@ -2157,12 +2161,12 @@ class Project(object):
           return self._RemoteFetch(name=name,
                                    current_branch_only=current_branch_only,
                                    initial=False, quiet=quiet, alt_dir=alt_dir,
-                                   depth=None)
+                                   depth=None, force_sync=force_sync)
         else:
           # Avoid infinite recursion: sync all branches with depth set to None
           return self._RemoteFetch(name=name, current_branch_only=False,
                                    initial=False, quiet=quiet, alt_dir=alt_dir,
-                                   depth=None)
+                                   depth=None, force_sync=force_sync)
 
     return ok
 
