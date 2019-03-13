@@ -1283,7 +1283,8 @@ class Project(object):
     if (need_to_fetch and
         not self._RemoteFetch(initial=is_new, quiet=quiet, alt_dir=alt_dir,
                               current_branch_only=current_branch_only,
-                              no_tags=no_tags, prune=prune, depth=depth)):
+                              no_tags=no_tags, prune=prune, depth=depth,
+                              force_sync=force_sync)):
       return False
 
     if self.worktree:
@@ -1906,7 +1907,8 @@ class Project(object):
                    alt_dir=None,
                    no_tags=False,
                    prune=False,
-                   depth=None):
+                   depth=None,
+                   force_sync=False):
 
     is_sha1 = False
     tag_name = None
@@ -2019,6 +2021,9 @@ class Project(object):
     if prune:
       cmd.append('--prune')
 
+    if force_sync:
+      cmd.append('--force')
+
     spec = []
     if not current_branch_only:
       # Fetch whole repo
@@ -2087,12 +2092,12 @@ class Project(object):
           return self._RemoteFetch(name=name,
                                    current_branch_only=current_branch_only,
                                    initial=False, quiet=quiet, alt_dir=alt_dir,
-                                   depth=None)
+                                   depth=None, force_sync=force_sync)
         else:
           # Avoid infinite recursion: sync all branches with depth set to None
           return self._RemoteFetch(name=name, current_branch_only=False,
                                    initial=False, quiet=quiet, alt_dir=alt_dir,
-                                   depth=None)
+                                   depth=None, force_sync=force_sync)
 
     return ok
 
