@@ -30,7 +30,7 @@ KEYRING_VERSION = (1, 2)
 
 # Each individual key entry is created by using:
 # gpg --armor --export keyid
-MAINTAINER_KEYS = """"""
+MAINTAINER_KEYS = None
 
 GIT = 'git'                      # our git command
 MIN_GIT_VERSION = (1, 7, 2)      # minimum supported git version
@@ -371,6 +371,9 @@ def NeedSetupGnuPG():
 
 
 def SetupGnuPG(quiet):
+  if not MAINTAINER_KEYS:
+    return False
+
   try:
     os.mkdir(home_dot_repo)
   except OSError as e:
