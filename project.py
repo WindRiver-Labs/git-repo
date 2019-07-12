@@ -1,3 +1,5 @@
+# -*- coding:utf-8 -*-
+#
 # Copyright (C) 2008 The Android Open Source Project
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -2230,13 +2232,17 @@ class Project(object):
         cmd += ['--continue-at', '%d' % (size,)]
       else:
         platform_utils.remove(tmpPath)
-    if 'http_proxy' in os.environ and 'darwin' == sys.platform:
-      cmd += ['--proxy', os.environ['http_proxy']]
-    with GetUrlCookieFile(srcUrl, quiet) as (cookiefile, _proxy):
+    with GetUrlCookieFile(srcUrl, quiet) as (cookiefile, proxy):
       if cookiefile:
         cmd += ['--cookie', cookiefile, '--cookie-jar', cookiefile]
-      if srcUrl.startswith('persistent-'):
-        srcUrl = srcUrl[len('persistent-'):]
+      if proxy:
+        cmd += ['--proxy', proxy]
+      elif 'http_proxy' in os.environ and 'darwin' == sys.platform:
+        cmd += ['--proxy', os.environ['http_proxy']]
+      if srcUrl.startswith('persistent-https'):
+        srcUrl = 'http' + srcUrl[len('persistent-https'):]
+      elif srcUrl.startswith('persistent-http'):
+        srcUrl = 'http' + srcUrl[len('persistent-http'):]
       cmd += [srcUrl]
 
       if IsTrace():
@@ -2270,8 +2276,8 @@ class Project(object):
 
   def _IsValidBundle(self, path, quiet):
     try:
-      with open(path) as f:
-        if f.read(16) == '# v2 git bundle\n':
+      with open(path, 'rb') as f:
+        if f.read(16) == b'# v2 git bundle\n':
           return True
         else:
           if not quiet:
@@ -2835,15 +2841,10 @@ class Project(object):
                      gitdir=self._gitdir,
                      capture_stdout=True,
                      capture_stderr=True)
-      r = []
-      for line in p.process.stdout:
-        if line[-1] == '\n':
-          line = line[:-1]
-        r.append(line)
       if p.Wait() != 0:
         raise GitError('%s rev-list %s: %s' %
                        (self._project.name, str(args), p.stderr))
-      return r
+      return p.stdout.splitlines()
 
     def __getattr__(self, name):
       """Allow arbitrary git commands using pythonic syntax.
