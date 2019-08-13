@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import time
+import shutil
 
 from pyversion import is_python3
 if is_python3():
