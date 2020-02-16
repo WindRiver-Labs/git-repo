@@ -2048,7 +2048,10 @@ class Project(object):
     cmd.extend(spec)
 
     ok = False
-    for _i in range(2):
+    retries = 0
+    max_retries = 5
+    duration = 30
+    for _i in range(max_retries):
       gitcmd = GitCommand(self, cmd, bare=True, ssh_proxy=ssh_proxy)
       ret = gitcmd.Wait()
       if ret == 0:
@@ -2072,7 +2075,11 @@ class Project(object):
       elif ret < 0:
         # Git died with a signal, exit immediately
         break
-      time.sleep(random.randint(30, 45))
+      retries += 1
+      print('Retrying "%s" after %s seconds -- %s times (max: %s)' % \
+           (' '.join(cmd), duration, retries, max_retries))
+      time.sleep(duration)
+      duration += random.randint(5, 10)
 
     if initial:
       if alt_dir:
