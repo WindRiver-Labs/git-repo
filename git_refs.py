@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2009 The Android Open Source Project
 #
@@ -14,7 +15,7 @@
 # limitations under the License.
 
 import os
-from trace import Trace
+from repo_trace import Trace
 import platform_utils
 
 HEAD      = 'HEAD'
@@ -140,18 +141,11 @@ class GitRefs(object):
 
   def _ReadLoose1(self, path, name):
     try:
-      fd = open(path)
-    except IOError:
-      return
-
-    try:
-      try:
+      with open(path) as fd:
         mtime = os.path.getmtime(path)
         ref_id = fd.readline()
-      except (IOError, OSError):
-        return
-    finally:
-      fd.close()
+    except (IOError, OSError):
+      return
 
     try:
       ref_id = ref_id.decode()

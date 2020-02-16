@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2009 The Android Open Source Project
 #
@@ -39,10 +40,9 @@ in a Git repository for use during future 'repo init' invocations.
     helptext = self._helpDescription + '\n'
     r = os.path.dirname(__file__)
     r = os.path.dirname(r)
-    fd = open(os.path.join(r, 'docs', 'manifest-format.md'))
-    for line in fd:
-      helptext += line
-    fd.close()
+    with open(os.path.join(r, 'docs', 'manifest-format.md')) as fd:
+      for line in fd:
+        helptext += line
     return helptext
 
   def _Options(self, p):
@@ -72,14 +72,9 @@ in a Git repository for use during future 'repo init' invocations.
     if opt.output_file != '-':
       print('Saved manifest to %s' % opt.output_file, file=sys.stderr)
 
-  def Execute(self, opt, args):
+  def ValidateOptions(self, opt, args):
     if args:
       self.Usage()
 
-    if opt.output_file is not None:
-      self._Output(opt)
-      return
-
-    print('error: no operation to perform', file=sys.stderr)
-    print('error: see repo help manifest', file=sys.stderr)
-    sys.exit(1)
+  def Execute(self, opt, args):
+    self._Output(opt)

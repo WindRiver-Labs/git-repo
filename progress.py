@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2009 The Android Open Source Project
 #
@@ -16,9 +17,14 @@
 import os
 import sys
 from time import time
-from trace import IsTrace
+from repo_trace import IsTrace
 
 _NOT_TTY = not os.isatty(2)
+
+# This will erase all content in the current line (wherever the cursor is).
+# It does not move the cursor, so this is usually followed by \r to move to
+# column 0.
+CSI_ERASE_LINE = '\x1b[2K'
 
 class Progress(object):
   def __init__(self, title, total=0, units='', print_newline=False,
@@ -33,7 +39,7 @@ class Progress(object):
     self._print_newline = print_newline
     self._always_print_percentage = always_print_percentage
 
-  def update(self, inc=1):
+  def update(self, inc=1, msg=''):
     self._done += inc
 
     if _NOT_TTY or IsTrace():
@@ -46,7 +52,8 @@ class Progress(object):
         return
 
     if self._total <= 0:
-      sys.stderr.write('\r%s: %d, ' % (
+      sys.stderr.write('%s\r%s: %d,' % (
+        CSI_ERASE_LINE,
         self._title,
         self._done))
       sys.stderr.flush()
@@ -55,11 +62,13 @@ class Progress(object):
 
       if self._lastp != p or self._always_print_percentage:
         self._lastp = p
-        sys.stderr.write('\r%s: %3d%% (%d%s/%d%s)%s' % (
+        sys.stderr.write('%s\r%s: %3d%% (%d%s/%d%s)%s%s%s' % (
+          CSI_ERASE_LINE,
           self._title,
           p,
           self._done, self._units,
           self._total, self._units,
+          ' ' if msg else '', msg,
           "\n" if self._print_newline else ""))
         sys.stderr.flush()
 
@@ -68,13 +77,15 @@ class Progress(object):
       return
 
     if self._total <= 0:
-      sys.stderr.write('\r%s: %d, done.  \n' % (
+      sys.stderr.write('%s\r%s: %d, done.\n' % (
+        CSI_ERASE_LINE,
         self._title,
         self._done))
       sys.stderr.flush()
     else:
       p = (100 * self._done) / self._total
-      sys.stderr.write('\r%s: %3d%% (%d%s/%d%s), done.  \n' % (
+      sys.stderr.write('%s\r%s: %3d%% (%d%s/%d%s), done.\n' % (
+        CSI_ERASE_LINE,
         self._title,
         p,
         self._done, self._units,

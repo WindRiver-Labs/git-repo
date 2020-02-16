@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -36,5 +37,8 @@ to the Unix 'patch' command.
                  help='Paths are relative to the repository root')
 
   def Execute(self, opt, args):
+    ret = 0
     for project in self.GetProjects(args):
-      project.PrintWorkTreeDiff(opt.absolute)
+      if not project.PrintWorkTreeDiff(opt.absolute):
+        ret = 1
+    return ret

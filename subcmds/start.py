@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -39,16 +40,21 @@ revision specified in the manifest.
     p.add_option('--all',
                  dest='all', action='store_true',
                  help='begin branch in all projects')
+    p.add_option('-r', '--rev', '--revision', dest='revision',
+                 help='point branch at this revision instead of upstream')
+    p.add_option('--head', dest='revision', action='store_const', const='HEAD',
+                 help='abbreviation for --rev HEAD')
 
-  def Execute(self, opt, args):
+  def ValidateOptions(self, opt, args):
     if not args:
       self.Usage()
 
     nb = args[0]
     if not git.check_ref_format('heads/%s' % nb):
-      print("error: '%s' is not a valid name" % nb, file=sys.stderr)
-      sys.exit(1)
+      self.OptionParser.error("'%s' is not a valid name" % nb)
 
+  def Execute(self, opt, args):
+    nb = args[0]
     err = []
     projects = []
     if not opt.all:
@@ -108,7 +114,8 @@ revision specified in the manifest.
         else:
           branch_merge = self.manifest.default.revisionExpr
 
-      if not project.StartBranch(nb, branch_merge=branch_merge):
+      if not project.StartBranch(
+          nb, branch_merge=branch_merge, revision=opt.revision):
         err.append(project)
     pm.end()
 

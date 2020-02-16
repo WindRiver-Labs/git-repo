@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -104,7 +105,7 @@ following <command>.
 
 Example: to list projects:
 
-  %prog% forall -c 'echo $REPO_PROJECT'
+  %prog -c 'echo $REPO_PROJECT'
 
 Notice that $REPO_PROJECT is quoted to ensure it is expanded in
 the context of running <command> instead of in the calling shell.
@@ -138,6 +139,9 @@ without iterating through the remaining projects.
     p.add_option('-e', '--abort-on-errors',
                  dest='abort_on_errors', action='store_true',
                  help='Abort if a command exits unsuccessfully')
+    p.add_option('--ignore-missing', action='store_true',
+                 help='Silently skip & do not exit non-zero due missing '
+                      'checkouts')
 
     g = p.add_option_group('Output')
     g.add_option('-p',
@@ -176,10 +180,11 @@ without iterating through the remaining projects.
       'worktree': project.worktree,
     }
 
-  def Execute(self, opt, args):
+  def ValidateOptions(self, opt, args):
     if not opt.command:
       self.Usage()
 
+  def Execute(self, opt, args):
     cmd = [opt.command[0]]
 
     shell = True
@@ -321,10 +326,14 @@ def DoWork(project, mirror, opt, cmd, shell, cnt, config):
     cwd = project['worktree']
 
   if not os.path.exists(cwd):
-    if (opt.project_header and opt.verbose) \
-    or not opt.project_header:
+    # Allow the user to silently ignore missing checkouts so they can run on
+    # partial checkouts (good for infra recovery tools).
+    if opt.ignore_missing:
+      return 0
+    if ((opt.project_header and opt.verbose)
+        or not opt.project_header):
       print('skipping %s/' % project['relpath'], file=sys.stderr)
-    return
+    return 1
 
   if opt.project_header:
     stdin = subprocess.PIPE

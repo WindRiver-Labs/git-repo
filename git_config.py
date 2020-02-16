@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -43,7 +44,7 @@ else:
 from signal import SIGTERM
 from error import GitError, UploadError
 import platform_utils
-from trace import Trace
+from repo_trace import Trace
 if is_python3():
   from http.client import HTTPException
 else:
@@ -275,22 +276,16 @@ class GitConfig(object):
       return None
     try:
       Trace(': parsing %s', self.file)
-      fd = open(self._json)
-      try:
+      with open(self._json) as fd:
         return json.load(fd)
-      finally:
-        fd.close()
     except (IOError, ValueError):
       platform_utils.remove(self._json)
       return None
 
   def _SaveJson(self, cache):
     try:
-      fd = open(self._json, 'w')
-      try:
+      with open(self._json, 'w') as fd:
         json.dump(cache, fd, indent=2)
-      finally:
-        fd.close()
     except (IOError, TypeError):
       if os.path.exists(self._json):
         platform_utils.remove(self._json)
@@ -656,13 +651,14 @@ class Remote(object):
               info = urllib.request.urlopen(info_url, context=context).read()
           else:
               info = urllib.request.urlopen(info_url).read()
-          if info == 'NOT_AVAILABLE' or '<' in info:
+          if info == b'NOT_AVAILABLE' or b'<' in info:
             # If `info` contains '<', we assume the server gave us some sort
             # of HTML response back, like maybe a login page.
             #
             # Assume HTTP if SSH is not enabled or ssh_info doesn't look right.
             self._review_url = http_url
           else:
+            info = info.decode('utf-8')
             host, port = info.split()
             self._review_url = self._SshReviewUrl(userEmail, host, port)
         except urllib.error.HTTPError as e:
@@ -697,7 +693,8 @@ class Remote(object):
     if not rev.startswith(R_HEADS):
       return rev
 
-    raise GitError('remote %s does not have %s' % (self.name, rev))
+    raise GitError('%s: remote %s does not have %s' %
+                   (self.projectname, self.name, rev))
 
   def WritesTo(self, ref):
     """True if the remote stores to the tracking ref.
@@ -770,15 +767,12 @@ class Branch(object):
       self._Set('merge', self.merge)
 
     else:
-      fd = open(self._config.file, 'a')
-      try:
+      with open(self._config.file, 'a') as fd:
         fd.write('[branch "%s"]\n' % self.name)
         if self.remote:
           fd.write('\tremote = %s\n' % self.remote.name)
         if self.merge:
           fd.write('\tmerge = %s\n' % self.merge)
-      finally:
-        fd.close()
 
   def _Set(self, key, value):
     key = 'branch.%s.%s' % (self.name, key)

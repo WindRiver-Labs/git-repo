@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -220,7 +221,9 @@ Gerrit Code Review:  https://www.gerritcodereview.com/
       for commit in commit_list:
         print('         %s' % commit)
 
-      sys.stdout.write('to %s (y/N)? ' % remote.review)
+      print('to %s (y/N)? ' % remote.review, end='')
+      # TODO: When we require Python 3, use flush=True w/print above.
+      sys.stdout.flush()
       answer = sys.stdin.readline().strip().lower()
       answer = answer in ('y', 'yes', '1', 'true', 't')
 
@@ -267,11 +270,6 @@ Gerrit Code Review:  https://www.gerritcodereview.com/
       projects[project.relpath] = project
       branches[project.name] = b
     script.append('')
-
-    script = [ x.encode('utf-8')
-             if issubclass(type(x), unicode)
-             else x
-             for x in script ]
 
     script = Editor.EditString("\n".join(script)).split("\n")
 
@@ -359,10 +357,13 @@ Gerrit Code Review:  https://www.gerritcodereview.com/
 
           # if they want to auto upload, let's not ask because it could be automated
           if answer is None:
-            sys.stdout.write('Uncommitted changes in ' + branch.project.name)
-            sys.stdout.write(' (did you forget to amend?):\n')
-            sys.stdout.write('\n'.join(changes) + '\n')
-            sys.stdout.write('Continue uploading? (y/N) ')
+            print()
+            print('Uncommitted changes in %s (did you forget to amend?):'
+                  % branch.project.name)
+            print('\n'.join(changes))
+            print('Continue uploading? (y/N) ', end='')
+            # TODO: When we require Python 3, use flush=True w/print above.
+            sys.stdout.flush()
             a = sys.stdin.readline().strip().lower()
             if a not in ('y', 'yes', 't', 'true', 'on'):
               print("skipping upload", file=sys.stderr)

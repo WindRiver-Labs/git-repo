@@ -1,3 +1,4 @@
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -21,8 +22,9 @@ import tempfile
 from signal import SIGTERM
 
 from error import GitError
+from git_refs import HEAD
 import platform_utils
-from trace import REPO_TRACE, IsTrace, Trace
+from repo_trace import REPO_TRACE, IsTrace, Trace
 from wrapper import Wrapper
 
 GIT = 'git'
@@ -79,22 +81,12 @@ def terminate_ssh_clients():
 _git_version = None
 
 class _GitCall(object):
-  def version(self):
-    p = GitCommand(None, ['--version'], capture_stdout=True)
-    if p.Wait() == 0:
-      if hasattr(p.stdout, 'decode'):
-        return p.stdout.decode('utf-8')
-      else:
-        return p.stdout
-    return None
-
   def version_tuple(self):
     global _git_version
     if _git_version is None:
-      ver_str = git.version()
-      _git_version = Wrapper().ParseGitVersion(ver_str)
+      _git_version = Wrapper().ParseGitVersion()
       if _git_version is None:
-        print('fatal: "%s" unsupported' % ver_str, file=sys.stderr)
+        print('fatal: unable to detect git version', file=sys.stderr)
         sys.exit(1)
     return _git_version
 
@@ -107,13 +99,95 @@ class _GitCall(object):
     return fun
 git = _GitCall()
 
-def git_require(min_version, fail=False):
+
+def RepoSourceVersion():
+  """Return the version of the repo.git tree."""
+  ver = getattr(RepoSourceVersion, 'version', None)
+
+  # We avoid GitCommand so we don't run into circular deps -- GitCommand needs
+  # to initialize version info we provide.
+  if ver is None:
+    env = GitCommand._GetBasicEnv()
+
+    proj = os.path.dirname(os.path.abspath(__file__))
+    env[GIT_DIR] = os.path.join(proj, '.git')
+
+    p = subprocess.Popen([GIT, 'describe', HEAD], stdout=subprocess.PIPE,
+                         env=env)
+    if p.wait() == 0:
+      ver = p.stdout.read().strip().decode('utf-8')
+      if ver.startswith('v'):
+        ver = ver[1:]
+    else:
+      ver = 'unknown'
+    setattr(RepoSourceVersion, 'version', ver)
+
+  return ver
+
+
+class UserAgent(object):
+  """Mange User-Agent settings when talking to external services
+
+  We follow the style as documented here:
+  https://developer.mozilla.org/en-US/docs/Web/HTTP/Headers/User-Agent
+  """
+
+  _os = None
+  _repo_ua = None
+  _git_ua = None
+
+  @property
+  def os(self):
+    """The operating system name."""
+    if self._os is None:
+      os_name = sys.platform
+      if os_name.lower().startswith('linux'):
+        os_name = 'Linux'
+      elif os_name == 'win32':
+        os_name = 'Win32'
+      elif os_name == 'cygwin':
+        os_name = 'Cygwin'
+      elif os_name == 'darwin':
+        os_name = 'Darwin'
+      self._os = os_name
+
+    return self._os
+
+  @property
+  def repo(self):
+    """The UA when connecting directly from repo."""
+    if self._repo_ua is None:
+      py_version = sys.version_info
+      self._repo_ua = 'git-repo/%s (%s) git/%s Python/%d.%d.%d' % (
+          RepoSourceVersion(),
+          self.os,
+          git.version_tuple().full,
+          py_version.major, py_version.minor, py_version.micro)
+
+    return self._repo_ua
+
+  @property
+  def git(self):
+    """The UA when running git."""
+    if self._git_ua is None:
+      self._git_ua = 'git/%s (%s) git-repo/%s' % (
+          git.version_tuple().full,
+          self.os,
+          RepoSourceVersion())
+
+    return self._git_ua
+
+user_agent = UserAgent()
+
+def git_require(min_version, fail=False, msg=''):
   git_version = git.version_tuple()
   if min_version <= git_version:
     return True
   if fail:
     need = '.'.join(map(str, min_version))
-    print('fatal: git %s or later required' % need, file=sys.stderr)
+    if msg:
+      msg = ' for ' + msg
+    print('fatal: git %s or later required%s' % (need, msg), file=sys.stderr)
     sys.exit(1)
   return False
 
@@ -132,17 +206,7 @@ class GitCommand(object):
                ssh_proxy = False,
                cwd = None,
                gitdir = None):
-    env = os.environ.copy()
-
-    for key in [REPO_TRACE,
-              GIT_DIR,
-              'GIT_ALTERNATE_OBJECT_DIRECTORIES',
-              'GIT_OBJECT_DIRECTORY',
-              'GIT_WORK_TREE',
-              'GIT_GRAFT_FILE',
-              'GIT_INDEX_FILE']:
-      if key in env:
-        del env[key]
+    env = self._GetBasicEnv()
 
     # If we are not capturing std* then need to print it.
     self.tee = {'stdout': not capture_stdout, 'stderr': not capture_stderr}
@@ -162,6 +226,7 @@ class GitCommand(object):
     if 'GIT_ALLOW_PROTOCOL' not in env:
       _setenv(env, 'GIT_ALLOW_PROTOCOL',
               'file:git:http:https:ssh:persistent-http:persistent-https:sso:rpc')
+    _setenv(env, 'GIT_HTTP_USER_AGENT', user_agent.git)
 
     if project:
       if not cwd:
@@ -233,6 +298,23 @@ class GitCommand(object):
 
     self.process = p
     self.stdin = p.stdin
+
+  @staticmethod
+  def _GetBasicEnv():
+    """Return a basic env for running git under.
+
+    This is guaranteed to be side-effect free.
+    """
+    env = os.environ.copy()
+    for key in (REPO_TRACE,
+                GIT_DIR,
+                'GIT_ALTERNATE_OBJECT_DIRECTORIES',
+                'GIT_OBJECT_DIRECTORY',
+                'GIT_WORK_TREE',
+                'GIT_GRAFT_FILE',
+                'GIT_INDEX_FILE'):
+      env.pop(key, None)
+    return env
 
   def Wait(self):
     try:

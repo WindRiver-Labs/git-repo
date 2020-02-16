@@ -1,4 +1,5 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python
+# -*- coding:utf-8 -*-
 #
 # Copyright (C) 2008 The Android Open Source Project
 #
@@ -14,9 +15,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+"""The repo tool.
+
+People shouldn't run this directly; instead, they should use the `repo` wrapper
+which takes care of execing this entry point.
+"""
+
 from __future__ import print_function
 import getpass
-import imp
 import netrc
 import optparse
 import os
@@ -27,6 +33,7 @@ from pyversion import is_python3
 if is_python3():
   import urllib.request
 else:
+  import imp
   import urllib2
   urllib = imp.new_module('urllib')
   urllib.request = urllib2
@@ -38,8 +45,8 @@ except ImportError:
 
 from color import SetDefaultColoring
 import event_log
-from trace import SetTrace
-from git_command import git, GitCommand
+from repo_trace import SetTrace
+from git_command import git, GitCommand, user_agent
 from git_config import init_ssh, close_ssh
 from command import InteractiveCommand
 from command import MirrorSafeCommand
@@ -77,7 +84,10 @@ global_options.add_option('--color',
                           help='control color usage: auto, always, never')
 global_options.add_option('--trace',
                           dest='trace', action='store_true',
-                          help='trace git command execution')
+                          help='trace git command execution (REPO_TRACE=1)')
+global_options.add_option('--trace-python',
+                          dest='trace_python', action='store_true',
+                          help='trace python command execution')
 global_options.add_option('--time',
                           dest='time', action='store_true',
                           help='time repo command execution')
@@ -95,8 +105,8 @@ class _Repo(object):
     # add 'branch' as an alias for 'branches'
     all_commands['branch'] = all_commands['branches']
 
-  def _Run(self, argv):
-    result = 0
+  def _ParseArgs(self, argv):
+    """Parse the main `repo` command line options."""
     name = None
     glob = []
 
@@ -112,6 +122,12 @@ class _Repo(object):
       name = 'help'
       argv = []
     gopts, _gargs = global_options.parse_args(glob)
+
+    return (name, gopts, argv)
+
+  def _Run(self, name, gopts, argv):
+    """Execute the requested subcommand."""
+    result = 0
 
     if gopts.trace:
       SetTrace()
@@ -181,6 +197,7 @@ class _Repo(object):
     cmd_event = cmd.event_log.Add(name, event_log.TASK_COMMAND, start)
     cmd.event_log.SetParent(cmd_event)
     try:
+      cmd.ValidateOptions(copts, cargs)
       result = cmd.Execute(copts, cargs)
     except (DownloadError, ManifestInvalidRevisionError,
         NoManifestException) as e:
@@ -225,10 +242,6 @@ class _Repo(object):
                             os.path.expanduser(gopts.event_log)))
 
     return result
-
-
-def _MyRepoPath():
-  return os.path.dirname(__file__)
 
 
 def _CheckWrapperVersion(ver, repo_path):
@@ -281,51 +294,13 @@ def _PruneOptions(argv, opt):
       continue
     i += 1
 
-_user_agent = None
-
-def _UserAgent():
-  global _user_agent
-
-  if _user_agent is None:
-    py_version = sys.version_info
-
-    os_name = sys.platform
-    if os_name == 'linux2':
-      os_name = 'Linux'
-    elif os_name == 'win32':
-      os_name = 'Win32'
-    elif os_name == 'cygwin':
-      os_name = 'Cygwin'
-    elif os_name == 'darwin':
-      os_name = 'Darwin'
-
-    p = GitCommand(
-      None, ['describe', 'HEAD'],
-      cwd = _MyRepoPath(),
-      capture_stdout = True)
-    if p.Wait() == 0:
-      repo_version = p.stdout
-      if len(repo_version) > 0 and repo_version[-1] == '\n':
-        repo_version = repo_version[0:-1]
-      if len(repo_version) > 0 and repo_version[0] == 'v':
-        repo_version = repo_version[1:]
-    else:
-      repo_version = 'unknown'
-
-    _user_agent = 'git-repo/%s (%s) git/%s Python/%d.%d.%d' % (
-      repo_version,
-      os_name,
-      '.'.join(map(str, git.version_tuple())),
-      py_version[0], py_version[1], py_version[2])
-  return _user_agent
-
 class _UserAgentHandler(urllib.request.BaseHandler):
   def http_request(self, req):
-    req.add_header('User-Agent', _UserAgent())
+    req.add_header('User-Agent', user_agent.repo)
     return req
 
   def https_request(self, req):
-    req.add_header('User-Agent', _UserAgent())
+    req.add_header('User-Agent', user_agent.repo)
     return req
 
 def _AddPasswordFromUserInput(handler, msg, req):
@@ -518,7 +493,15 @@ def _Main(argv):
     try:
       init_ssh()
       init_http()
-      result = repo._Run(argv) or 0
+      name, gopts, argv = repo._ParseArgs(argv)
+      run = lambda: repo._Run(name, gopts, argv) or 0
+      if gopts.trace_python:
+        import trace
+        tracer = trace.Trace(count=False, trace=True, timing=True,
+                             ignoredirs=set(sys.path[1:]))
+        result = tracer.runfunc(run)
+      else:
+        result = run()
     finally:
       close_ssh()
   except KeyboardInterrupt:
