@@ -14,12 +14,9 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-import os
 import sys
 from time import time
 from repo_trace import IsTrace
-
-_NOT_TTY = not os.isatty(2)
 
 # This will erase all content in the current line (wherever the cursor is).
 # It does not move the cursor, so this is usually followed by \r to move to
@@ -42,7 +39,7 @@ class Progress(object):
   def update(self, inc=1, msg=''):
     self._done += inc
 
-    if _NOT_TTY or IsTrace():
+    if IsTrace():
       return
 
     if not self._show:
@@ -73,7 +70,7 @@ class Progress(object):
         sys.stderr.flush()
 
   def end(self):
-    if _NOT_TTY or IsTrace() or not self._show:
+    if IsTrace() or not self._show:
       return
 
     if self._total <= 0:
