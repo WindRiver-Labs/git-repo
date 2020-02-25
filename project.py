@@ -2048,14 +2048,17 @@ class Project(object):
     cmd.extend(spec)
 
     ok = False
-    retries = 0
-    max_retries = 5
+    tries = 0
+    max_tries = 5
     duration = 30
-    for _i in range(max_retries):
-      gitcmd = GitCommand(self, cmd, bare=True, ssh_proxy=ssh_proxy)
+    for _i in range(max_tries):
+      gitcmd = GitCommand(self, cmd, bare=True, ssh_proxy=ssh_proxy, \
+                          capture_stderr = True)
       ret = gitcmd.Wait()
       if ret == 0:
         ok = True
+        if tries > 0:
+            print('%s: Retried successfully after %s tries' % (self.name, tries + 1))
         break
       # If needed, run the 'git remote prune' the first time through the loop
       elif (not _i and
@@ -2075,11 +2078,15 @@ class Project(object):
       elif ret < 0:
         # Git died with a signal, exit immediately
         break
-      retries += 1
-      print('Retrying "%s" after %s seconds -- %s times (max: %s)' % \
-           (' '.join(cmd), duration, retries, max_retries))
-      time.sleep(duration)
-      duration += random.randint(5, 10)
+      tries += 1
+      if tries < max_tries:
+        duration += random.randint(5, 10)
+        print('%s: Retrying "%s" after %s seconds -- %s tries (max: %s)' % \
+             (self.name, ' '.join(cmd), duration, tries + 1, max_tries))
+        time.sleep(duration)
+      else:
+        print('%s: Failed to fetch it after %s tries' % (self.name, max_tries))
+        print('%s: %s' % (self.name, gitcmd.stderr))
 
     if initial:
       if alt_dir:
