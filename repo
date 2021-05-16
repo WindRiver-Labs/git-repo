@@ -16,7 +16,7 @@ import os
 REPO_URL = os.environ.get('REPO_URL', None)
 if not REPO_URL:
   REPO_URL = 'git://lxgit.wrs.com/tools/git-repo'
-REPO_REV = 'wr-10.20-20200212'
+REPO_REV = 'WRLINUX_10_21_BASE'
 
 # Copyright (C) 2008 Google Inc.
 #
