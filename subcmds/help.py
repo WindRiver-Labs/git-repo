@@ -17,7 +17,7 @@
 from __future__ import print_function
 import re
 import sys
-from formatter import AbstractFormatter, DumbWriter
+import textwrap
 
 from color import Coloring
 from command import PagedCommand, MirrorSafeCommand, GitcAvailableCommand, GitcClientCommand
@@ -93,8 +93,7 @@ Displays detailed usage information about a command.
       def __init__(self, gc):
         Coloring.__init__(self, gc, 'help')
         self.heading = self.printer('heading', attr='bold')
-
-        self.wrap = AbstractFormatter(DumbWriter())
+        self._first = True
 
       def _PrintSection(self, heading, bodyAttr):
         try:
@@ -104,7 +103,9 @@ Displays detailed usage information about a command.
         if body == '' or body is None:
           return
 
-        self.nl()
+        if not self._first:
+          self.nl()
+        self._first = False
 
         self.heading('%s%s', header_prefix, heading)
         self.nl()
@@ -114,7 +115,8 @@ Displays detailed usage information about a command.
         body = body.strip()
         body = body.replace('%prog', me)
 
-        asciidoc_hdr = re.compile(r'^\n?#+ (.+)$')
+        # Extract the title, but skip any trailing {#anchors}.
+        asciidoc_hdr = re.compile(r'^\n?#+ ([^{]+)(\{#.+\})?$')
         for para in body.split("\n\n"):
           if para.startswith(' '):
             self.write('%s', para)
@@ -129,9 +131,12 @@ Displays detailed usage information about a command.
             self.nl()
             continue
 
-          self.wrap.add_flowing_data(para)
-          self.wrap.end_paragraph(1)
-        self.wrap.end_paragraph(0)
+          lines = textwrap.wrap(para.replace('  ', ' '), width=80,
+                                break_long_words=False, break_on_hyphens=False)
+          for line in lines:
+            self.write('%s', line)
+            self.nl()
+          self.nl()
 
     out = _Out(self.manifest.globalConfig)
     out._PrintSection('Summary', 'helpSummary')
