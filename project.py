@@ -2325,8 +2325,11 @@ class Project(object):
       tries += 1
       if tries < max_tries:
         duration += random.randint(5, 10)
-        print('%s: Retrying "%s" after %s seconds -- %s tries (max: %s)' % \
-             (self.name, ' '.join(cmd), duration, tries + 1, max_tries))
+        print('%s: failed cmd: %s' % (self.gitdir, ' '.join(cmd)))
+        if gitcmd.stderr:
+            print('%s: failed message: %s' % (self.gitdir, gitcmd.stderr))
+        print('%s: Retrying failed cmd after %s seconds -- %s tries (max: %s)' % \
+             (self.gitdir, duration, tries + 1, max_tries))
         time.sleep(duration)
       else:
         print('%s: Failed to fetch it after %s tries' % (self.name, max_tries))
