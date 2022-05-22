@@ -103,13 +103,18 @@ class _XmlRemote(object):
     # urljoin will gets confused over quite a few things.  The ones we care
     # about here are:
     # * no scheme in the base url, like <hostname:port>
+    # * scp-like syntax:
+    #   [user@]host.xz:path/to/repo.git/
+
     # We handle no scheme by replacing it with an obscure protocol, gopher
     # and then replacing it with the original when we are done.
 
     if manifestUrl.find(':') != manifestUrl.find('/') - 1:
       url = urllib.parse.urljoin('gopher://' + manifestUrl, url)
       url = re.sub(r'^gopher://', '', url)
-    else:
+    # The defination of scp-like is from "git help clone", which doesn't need
+    # urljoin.
+    elif not (':' in url and not '/' in url.split(':')[0]):
       url = urllib.parse.urljoin(manifestUrl, url)
     return url
 
